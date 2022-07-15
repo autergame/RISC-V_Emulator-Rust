@@ -1,0 +1,84 @@
+jal zero, main
+
+abs:
+	bge a2, zero, jump1
+	sub a0, zero, a2
+	jalr zero, ra, 0
+	jump1:
+		addi a0, a2, 0
+		jalr zero, ra, 0
+
+main:
+ebreak
+	addi sp, sp, -16
+	sw sp, ra, 12
+	sw sp, a0, 8
+	sw sp, a2, 4
+	sw sp, fp, 0
+	addi fp, sp, 16
+ebreak
+		addi a2, zero, 5
+			jal ra, abs
+		addi a0, a0, 5
+ebreak
+	lw ra, sp, 12
+	lw a0, sp, 8
+	lw a2, sp, 4
+	lw fp, sp, 0
+	addi sp, sp, 16
+
+ebreak
+	addi sp, sp, -16
+	sw sp, ra, 12
+	sw sp, a0, 8
+	sw sp, a2, 4
+	sw sp, fp, 0
+	addi fp, sp, 16
+ebreak
+		addi a2, zero, -5
+			jal ra, abs
+		addi a0, a0, 5
+ebreak
+	lw ra, sp, 12
+	lw a0, sp, 8
+	lw a2, sp, 4
+	lw fp, sp, 0
+	addi sp, sp, 16
+
+ebreak
+	addi sp, sp, -16
+	sw sp, ra, 12
+	sw sp, a0, 8
+	sw sp, a2, 4
+	sw sp, fp, 0
+	addi fp, sp, 16
+ebreak
+		addi a2, zero, 5
+			jal ra, abs
+		addi a0, a0, -5
+ebreak
+	lw ra, sp, 12
+	lw a0, sp, 8
+	lw a2, sp, 4
+	lw fp, sp, 0
+	addi sp, sp, 16
+
+ebreak
+	addi sp, sp, -16
+	sw sp, ra, 12
+	sw sp, a0, 8
+	sw sp, a2, 4
+	sw sp, fp, 0
+	addi fp, sp, 16
+ebreak
+		addi a2, zero, -5
+			jal ra, abs
+		addi a0, a0, -5
+ebreak
+	lw ra, sp, 12
+	lw a0, sp, 8
+	lw a2, sp, 4
+	lw fp, sp, 0
+	addi sp, sp, 16
+	
+ebreak

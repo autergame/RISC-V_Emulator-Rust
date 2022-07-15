@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use inst_defs::*;
 use instructions::Instruction;
 
@@ -5,12 +7,12 @@ fn str_is_in_list(list: &[&str], str: &str) -> Option<usize> {
     return list.iter().position(|&keyword| keyword == str);
 }
 
-fn hex_or_decimal_from_string(str: &str) -> u32 {
-    let mut str_len = str.len();
-    if str_len == 0 {
-        return 0;
+fn hex_or_decimal_from_string(str: &str) -> Option<u32> {
+    if check_valid_hex_or_decimal(str) == false {
+        return None;
     }
 
+    let mut str_len = str.len();
     let mut str_iter = str.chars().peekable();
 
     let mut negative = false;
@@ -24,21 +26,18 @@ fn hex_or_decimal_from_string(str: &str) -> u32 {
 
     let mut result: u32;
 
-    if str_len >= 1 {
-        let str_iter_str = str_iter.clone().collect::<String>();
-        if (str_len > 2) && (str_iter_str.starts_with("0x") | str_iter_str.starts_with("0X")) {
-            result = u32::from_str_radix(&str_iter_str[2..], 16).unwrap();
-        } else {
-            result = u32::from_str_radix(str_iter_str.as_str(), 10).unwrap();
-        }
-        if negative {
-            result = (-(result as i32)) as u32;
-        }
+    let str_iter_str = str_iter.clone().collect::<String>();
+    if (str_len > 2) && (str_iter_str.starts_with("0x") | str_iter_str.starts_with("0X")) {
+        result = u32::from_str_radix(&str_iter_str[2..], 16).unwrap();
     } else {
-        result = 0;
+        result = u32::from_str_radix(&str_iter_str, 10).unwrap();
     }
 
-    return result;
+    if negative {
+        result = (-(result as i32)) as u32;
+    }
+
+    return Some(result);
 }
 
 fn check_valid_hex_or_decimal(str: &str) -> bool {
@@ -86,7 +85,7 @@ pub fn assemble(insts: &str) -> Vec<u32> {
         })
         .collect::<Vec<&str>>();
 
-    let mut label_list: Vec<(&str, usize)> = Vec::new();
+    let mut label_list: HashMap<&str, usize> = HashMap::new();
 
     tokens
         .iter()
@@ -94,309 +93,209 @@ pub fn assemble(insts: &str) -> Vec<u32> {
         .enumerate()
         .filter(|(_, token)| token.ends_with(':'))
         .for_each(|(i, token)| {
-            label_list.push((token.strip_suffix(":").unwrap(), (i - label_list.len()) * 4))
+            label_list.insert(token.strip_suffix(":").unwrap(), (i - label_list.len()) * 4);
         });
 
-    let tokens_list = tokens
-        .into_iter()
-        .filter(|token| !token.ends_with(':'))
-        .enumerate()
-        .collect::<Vec<(usize, &str)>>();
-
-    let tokens_count = tokens_list.len();
-    let mut tokens_list_iter = tokens_list.into_iter();
+    let mut tokens_list = tokens.into_iter().filter(|token| !token.ends_with(':'));
 
     let mut compiled_insts: Vec<u32> = Vec::new();
 
-    while let Some((i, token_1)) = tokens_list_iter.next() {
+    while let Some(token_1) = tokens_list.next() {
         let opcode = str_is_in_list(KEYWORDS, token_1);
+        if opcode == None {
+            println!("Skipping unknown opcode: {}", token_1);
+            continue;
+        }
+        let opcode = opcode.unwrap();
 
         match opcode {
 			// U
-			Some(0) |    // lui
-			Some(1) => { // auipc
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rd imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rd = str_is_in_list(REGISTERS, token_2);
-				if rd == None {
-					println!("Unknown register rd: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				if check_valid_hex_or_decimal(token_3) == false {
-					println!("Invalid number / hex: {}", token_3);
-					break;
-				}
-				let imm = hex_or_decimal_from_string(token_3);
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			0 |    // lui
+			1 => { // auipc
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rd imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let imm = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid number / hex: {}", token_3));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn2ArgsU32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rd.unwrap()], imm);
+					let inst = inst_funct(REGISTERS_INDEX[rd], imm);
 					compiled_insts.push(inst.get_bits());
 				}
 			},
 			// J
-			Some(2) => { // jal
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rd imm/label", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: imm/label", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rd = str_is_in_list(REGISTERS, token_2);
-				if rd == None {
-					println!("Unknown register rd: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				let mut imm: u32;
-				if let Some(label_index) = label_list.iter().position(|&(label, _)| label == token_3) {
-					imm = label_list[label_index].1 as u32;
-					let insts_pointer = (compiled_insts.len() * 4) as u32;
-					if imm < insts_pointer {
-						imm = (-((insts_pointer - imm) as i32)) as u32;
-					} else {
-						imm -= insts_pointer;
-					}
-				} else {
-					if check_valid_hex_or_decimal(token_3) == false
-					{
-						println!("Unknown label or invalid number / hex: {}", token_3);
-						break;
-					}
-					imm = hex_or_decimal_from_string(token_3);
-				}
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			2 => { // jal
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rd imm/label", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm/label", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let imm = get_and_convert_label_from_hashmap(&label_list, token_3, compiled_insts.len());
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn2ArgsI32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rd.unwrap()], imm as i32);
+					let inst = inst_funct(REGISTERS_INDEX[rd], imm as i32);
 					compiled_insts.push(inst.get_bits());
 				}
 			}
 			// R
-			Some(27) | 	  // add
-			Some(28) | 	  // sub
-			Some(29) | 	  // sll
-			Some(30) | 	  // slt
-			Some(31) | 	  // sltu
-			Some(32) | 	  // xor
-			Some(33) | 	  // srl
-			Some(34) | 	  // sra
-			Some(35) | 	  // or
-			Some(36) => { // and
-				if (i + 3) > tokens_count {
-					println!("Opcode: {} need more 3 tokens: rd rs1 rs2", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rs1 rs2", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: rs2", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rd = str_is_in_list(REGISTERS, token_2);
-				if rd == None {
-					println!("Unknown register rd: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				let rs1 = str_is_in_list(REGISTERS, token_3);
-				if rs1 == None {
-					println!("Unknown register rs1: {}", token_3);
-					break;
-				}
-				let token_4 = tokens_list_iter.next().unwrap().1;
-				let rs2 = str_is_in_list(REGISTERS, token_4);
-				if rs2 == None {
-					println!("Unknown register rs2: {}", token_4);
-					break;
-				}
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			27 | 	// add
+			28 | 	// sub
+			29 | 	// sll
+			30 | 	// slt
+			31 | 	// sltu
+			32 | 	// xor
+			33 | 	// srl
+			34 | 	// sra
+			35 | 	// or
+			36 => { // and
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd rs1 rs2", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs1 rs2", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: rs2", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let rs1 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_3));
+				let rs2 = str_is_in_list(REGISTERS, token_4).unwrap_or_else(|| panic!("Unknown register rs2: {}", token_4));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn3ArgsU32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rd.unwrap()],
-						REGISTERS_INDEX[rs1.unwrap()],  REGISTERS_INDEX[rs2.unwrap()]);
+					let inst = inst_funct(REGISTERS_INDEX[rd], REGISTERS_INDEX[rs1], REGISTERS_INDEX[rs2]);
 					compiled_insts.push(inst.get_bits());
 				}
 			}
 			// I
-			Some(3) | 	  // jalr
-			Some(10) | 	  // lb
-			Some(11) | 	  // lh
-			Some(12) | 	  // lw
-			Some(13) | 	  // lbu
-			Some(14) | 	  // lhu
-			Some(18) | 	  // addi
-			Some(19) | 	  // slti
-			Some(20) | 	  // sltiu
-			Some(21) | 	  // xori
-			Some(22) | 	  // ori
-			Some(23) | 	  // andi
+			3 | 	// jalr
+			10 | 	// lb
+			11 | 	// lh
+			12 | 	// lw
+			13 | 	// lbu
+			14 | 	// lhu
+			18 | 	// addi
+			19 | 	// slti
+			20 | 	// sltiu
+			21 | 	// xori
+			22 | 	// ori
+			23 | 	// andi
 			// Shift
-			Some(24) | 	  // slli
-			Some(25) | 	  // srli
-			Some(26) => { // srai
-				if (i + 3) > tokens_count {
-					println!("Opcode: {} need more 3 tokens: rd rs1 imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rs1 imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rd = str_is_in_list(REGISTERS, token_2);
-				if rd == None {
-					println!("Unknown register rd: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				let rs1 = str_is_in_list(REGISTERS, token_3);
-				if rs1 == None {
-					println!("Unknown register rs1: {}", token_3);
-					break;
-				}
-				let token_4 = tokens_list_iter.next().unwrap().1;
-				if check_valid_hex_or_decimal(token_4) == false {
-					println!("Invalid number / hex: {}", token_4);
-					break;
-				}
-				let imm = hex_or_decimal_from_string(token_4);
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			24 | 	// slli
+			25 | 	// srli
+			26 => { // srai
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd rs1 imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs1 imm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let rs1 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_3));
+				let imm = hex_or_decimal_from_string(token_4).unwrap_or_else(|| panic!("Invalid number / hex: {}", token_4));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn3ArgsI32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rd.unwrap()],
-						REGISTERS_INDEX[rs1.unwrap()], imm as i32);
+					let inst = inst_funct(REGISTERS_INDEX[rd], REGISTERS_INDEX[rs1], imm as i32);
 					compiled_insts.push(inst.get_bits());
 				}
 			}
 			// B
-			Some(4) |    // beq
-			Some(5) |    // bne
-			Some(6) |    // blt
-			Some(7) |    // bge
-			Some(8) |    // bltu
-			Some(9) => { // bgeu
-				if (i + 3) > tokens_count {
-					println!("Opcode: {} need more 3 tokens: rs1 rs2 imm/label", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rs2 imm/label", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: imm/label", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rs1 = str_is_in_list(REGISTERS, token_2);
-				if rs1 == None {
-					println!("Unknown register rs1: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				let rs2 = str_is_in_list(REGISTERS, token_3);
-				if rs2 == None {
-					println!("Unknown register rs2: {}", token_3);
-					break;
-				}
-				let token_4 = tokens_list_iter.next().unwrap().1;
-				let mut imm: u32;
-				if let Some(label_index) = label_list.iter().position(|&(label, _)| label == token_4) {
-					imm = label_list[label_index].1 as u32;
-					let insts_pointer = (compiled_insts.len() * 4) as u32;
-					if imm < insts_pointer {
-						imm = (-((insts_pointer - imm) as i32)) as u32;
-					} else {
-						imm -= insts_pointer;
-					}
-				} else {
-					if check_valid_hex_or_decimal(token_4) == false
-					{
-						println!("Unknown label or invalid number / hex: {}", token_4);
-						break;
-					}
-					imm = hex_or_decimal_from_string(token_4);
-				}
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			4 |    // beq
+			5 |    // bne
+			6 |    // blt
+			7 |    // bge
+			8 |    // bltu
+			9 => { // bgeu
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rs1 rs2 imm/label", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs2 imm/label", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm/label", keyword));
+				let rs1 = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_2));
+				let rs2 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs2: {}", token_3));
+				let imm = get_and_convert_label_from_hashmap(&label_list, token_4, compiled_insts.len());
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn3ArgsI32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rs1.unwrap()],
-						REGISTERS_INDEX[rs2.unwrap()], imm as i32);
+					let inst = inst_funct(REGISTERS_INDEX[rs1], REGISTERS_INDEX[rs2], imm as i32);
 					compiled_insts.push(inst.get_bits());
 				}
 			}
 			// S
-			Some(15) | 	  // sb
-			Some(16) | 	  // sh
-			Some(17) => { // sw
-				if (i + 3) > tokens_count {
-					println!("Opcode: {} need more 3 tokens: rs1 rs2 imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 2) > tokens_count {
-					println!("Opcode: {} need more 2 tokens: rs2 imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				if (i + 1) > tokens_count {
-					println!("Opcode: {} need more 1 token: imm", KEYWORDS[opcode.unwrap()]);
-					break;
-				}
-				let token_2 = tokens_list_iter.next().unwrap().1;
-				let rs1 = str_is_in_list(REGISTERS, token_2);
-				if rs1 == None {
-					println!("Unknown register rs1: {}", token_2);
-					break;
-				}
-				let token_3 = tokens_list_iter.next().unwrap().1;
-				let rs2 = str_is_in_list(REGISTERS, token_3);
-				if rs2 == None {
-					println!("Unknown register rs2: {}", token_3);
-					break;
-				}
-				let token_4 = tokens_list_iter.next().unwrap().1;
-				if check_valid_hex_or_decimal(token_4) == false {
-					println!("Invalid number / hex: {}", token_4);
-					break;
-				}
-				let imm = hex_or_decimal_from_string(token_4);
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			15 | 	// sb
+			16 | 	// sh
+			17 => { // sw
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rs1 rs2 imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs2 imm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let rs1 = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_2));
+				let rs2 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs2: {}", token_3));
+				let imm = hex_or_decimal_from_string(token_4).unwrap_or_else(|| panic!("Invalid number / hex: {}", token_4));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn3ArgsI32(inst_funct) = inst_funct_type {
-					let inst = inst_funct(REGISTERS_INDEX[rs1.unwrap()],
-						REGISTERS_INDEX[rs2.unwrap()], imm as i32);
+					let inst = inst_funct(REGISTERS_INDEX[rs1], REGISTERS_INDEX[rs2], imm as i32);
 					compiled_insts.push(inst.get_bits());
 				}
 			}
 			// E
-			Some(37) | 	  // ecall
-			Some(38) => { // ebreak
-				let inst_funct_type = &OPCODE_FUNCTS[opcode.unwrap()];
+			37 | 	// ecall
+			38 => { // ebreak
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
 				if let InstFnTypes::InstFn0Args(inst_funct) = inst_funct_type {
 					let inst = inst_funct();
 					compiled_insts.push(inst.get_bits());
 				}
 			}
-			None | _ => {
-				println!("Skipping unknown opcode: {}", token_1);
-				continue;
+			// CSR
+			39 | 	// csrrw
+			40 | 	// csrrs
+			41 => { // csrrc
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd csr rs1", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: csr rs1", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: rs1", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let csr = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid csr number / hex: {}", token_3));
+				let rs1 = str_is_in_list(REGISTERS, token_4).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_4));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
+				if let InstFnTypes::InstFn3ArgsI32(inst_funct) = inst_funct_type {
+					let inst = inst_funct(REGISTERS_INDEX[rd], REGISTERS_INDEX[rs1], csr as i32);
+					compiled_insts.push(inst.get_bits());
+				}
 			}
+			// CSR I
+			42 |    // csrrwi
+			43 |    // csrrsi
+			44 => { // csrrci
+				let keyword = KEYWORDS[opcode];
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd csr zimm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: csr zimm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: zimm", keyword));
+				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
+				let csr = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid csr number / hex: {}", token_3));
+				let zimm = hex_or_decimal_from_string(token_4).unwrap_or_else(|| panic!("Invalid zimm number / hex: {}", token_4));
+				let inst_funct_type = &OPCODE_FUNCTS[opcode];
+				if let InstFnTypes::InstFn3ArgsI32(inst_funct) = inst_funct_type {
+					let inst = inst_funct(REGISTERS_INDEX[rd], zimm, csr as i32);
+					compiled_insts.push(inst.get_bits());
+				}
+			}
+			_ => {}
 		}
     }
 
     return compiled_insts;
+}
+
+fn get_and_convert_label_from_hashmap(
+    label_list: &HashMap<&str, usize>,
+    label: &str,
+    last_pointer: usize,
+) -> u32 {
+    let mut imm: u32;
+    if let Some(label_value) = label_list.get(label) {
+        imm = *label_value as u32;
+        let insts_pointer = (last_pointer * 4) as u32;
+        if imm < insts_pointer {
+            imm = (-((insts_pointer - imm) as i32)) as u32;
+        } else {
+            imm -= insts_pointer;
+        }
+    } else {
+        imm = hex_or_decimal_from_string(label)
+            .unwrap_or_else(|| panic!("Unknown label or invalid number / hex: {}", label));
+    }
+    return imm;
 }
 
 const KEYWORDS: &[&str; 45] = &[
