@@ -1,7 +1,7 @@
 # RISC-V_Emulator-Rust
-Simplest RISC-V Emulador
+Simplest RISC-V Emulador Using Rust
 
-RV32I instruction set in Rust
+RV32I instruction set
 
 ## Papers From:
 * https://github.com/johnwinans/rvalp/
