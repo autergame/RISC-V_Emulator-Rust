@@ -15,14 +15,13 @@ pub struct RiscvCpu {
 }
 
 impl RiscvCpu {
-    pub fn create() -> RiscvCpu {
-        let cpu = RiscvCpu {
+    pub fn new() -> RiscvCpu {
+        RiscvCpu {
             program_counter: 0,
             csrs: vec![0u64; 4096],
             registers: vec![0u32; 32],
             memory: vec![0u8; MEMORY_SIZE],
-        };
-        return cpu;
+        }
     }
     pub fn reset(&mut self) {
         self.program_counter = 0;
@@ -49,7 +48,7 @@ impl RiscvCpu {
     }
     fn read_u16_memory(&self, address: usize) -> u16 {
         if let Some(access) = self.memory.get(address..address + 2) {
-            return u16::from_le_bytes(access.try_into().unwrap());
+            u16::from_le_bytes(access.try_into().unwrap())
         } else {
             panic!("Memory access out of bounds");
         }
@@ -63,7 +62,7 @@ impl RiscvCpu {
     }
     fn read_u32_memory(&self, address: usize) -> u32 {
         if let Some(access) = self.memory.get(address..address + 4) {
-            return u32::from_le_bytes(access.try_into().unwrap());
+            u32::from_le_bytes(access.try_into().unwrap())
         } else {
             panic!("Memory access out of bounds");
         }
@@ -74,7 +73,7 @@ impl RiscvCpu {
         self.write_u32_memory(inst_list.len(), 0xDEADC0DE);
     }
     pub fn get_register(&self, index: u32) -> u32 {
-        return self.registers[index as usize];
+        self.registers[index as usize]
     }
     fn set_register(&mut self, index: u32, value: u32) {
         self.registers[index as usize] = value;
