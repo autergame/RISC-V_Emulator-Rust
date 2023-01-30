@@ -1,11 +1,6 @@
-use imm_enc_dec::{
-    inst_b_imm_dec, inst_b_imm_enc, inst_i_imm_dec, inst_i_imm_enc, inst_j_imm_dec, inst_j_imm_enc,
-    inst_s_imm_dec, inst_s_imm_enc, inst_shift_imm_dec, inst_shift_imm_enc, inst_u_imm_dec,
-    inst_u_imm_enc,
-};
+use imm_enc_dec::*;
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _Op(u32);
     impl Debug;
     u32;
@@ -14,7 +9,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _R(u32);
     impl Debug;
     u32;
@@ -27,7 +21,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _I(u32);
     impl Debug;
     u32;
@@ -39,7 +32,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _Shift(u32);
     impl Debug;
     u32;
@@ -52,7 +44,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _S(u32);
     impl Debug;
     u32;
@@ -65,7 +56,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _B(u32);
     impl Debug;
     u32;
@@ -80,7 +70,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _U(u32);
     impl Debug;
     u32;
@@ -90,7 +79,6 @@ bitfield! {
 }
 
 bitfield! {
-    #[derive(Copy, Clone)]
     pub struct _J(u32);
     impl Debug;
     u32;
@@ -156,7 +144,7 @@ impl _J {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug)]
 pub enum Instruction {
     R(_R),
     I(_I),

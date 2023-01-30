@@ -1,8 +1,11 @@
 [package]
 name = "risc-v_emulator-rust"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["autergame"]
 
 [dependencies]
 bitfield = "0.14.0"
-clap = "3.2.10"
+clap = "4.1.4"
+
+[profile]
+release = { strip = true }

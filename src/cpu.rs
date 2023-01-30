@@ -31,7 +31,7 @@ impl RiscvCpu {
         self.set_register(2, STACK_POINTER);
     }
     pub fn dump_registers(&self) {
-        println!("\npc: {0:>10} 0x{0:08X}", self.program_counter);
+        println!("\npc: {0} 0x{0:X}", self.program_counter);
         self.registers.iter().enumerate().for_each(|(i, reg)| {
             println!(
                 "x{0:<2} {1:>5}: 0x{2:08X} {2:>10} {3:>11}",
@@ -40,37 +40,39 @@ impl RiscvCpu {
         });
     }
     fn write_u16_memory(&mut self, address: usize, value: u16) {
-        if let Some(access) = self.memory.get_mut(address..address + 2) {
-            access.copy_from_slice(&value.to_le_bytes());
-        } else {
-            panic!("Memory overflow");
-        }
+        let access = self
+            .memory
+            .get_mut(address..address + 2)
+            .expect("Memory write out of bounds");
+        access.copy_from_slice(&value.to_le_bytes());
     }
     fn read_u16_memory(&self, address: usize) -> u16 {
-        if let Some(access) = self.memory.get(address..address + 2) {
-            u16::from_le_bytes(access.try_into().unwrap())
-        } else {
-            panic!("Memory access out of bounds");
-        }
+        let access = self
+            .memory
+            .get(address..address + 2)
+            .expect("Memory read out of bounds");
+        u16::from_le_bytes(access.try_into().unwrap())
     }
     fn write_u32_memory(&mut self, address: usize, value: u32) {
-        if let Some(access) = self.memory.get_mut(address..address + 4) {
-            access.copy_from_slice(&value.to_le_bytes());
-        } else {
-            panic!("Memory overflow");
-        }
+        let access = self
+            .memory
+            .get_mut(address..address + 4)
+            .expect("Memory write out of bounds");
+        access.copy_from_slice(&value.to_le_bytes());
     }
     fn read_u32_memory(&self, address: usize) -> u32 {
-        if let Some(access) = self.memory.get(address..address + 4) {
-            u32::from_le_bytes(access.try_into().unwrap())
-        } else {
-            panic!("Memory access out of bounds");
-        }
+        let access = self
+            .memory
+            .get(address..address + 4)
+            .expect("Memory read out of bounds");
+        u32::from_le_bytes(access.try_into().unwrap())
     }
     pub fn load_from_u8(&mut self, inst_list: &[u8]) {
+        println!("Loading file");
         self.reset();
         self.memory[..inst_list.len()].copy_from_slice(inst_list);
         self.write_u32_memory(inst_list.len(), 0xDEADC0DE);
+        println!("Finished Loading file");
     }
     pub fn get_register(&self, index: u32) -> u32 {
         self.registers[index as usize]
@@ -554,6 +556,7 @@ impl RiscvCpu {
         }
     }
     pub fn run(&mut self) {
+        println!("Running file");
         loop {
             self.set_register(0, 0);
             let bits = self.read_u32_memory(self.program_counter as usize);
@@ -562,6 +565,7 @@ impl RiscvCpu {
             }
             self.execute_inst(bits);
         }
+        println!("Finished running file");
     }
 }
 

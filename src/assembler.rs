@@ -63,10 +63,11 @@ fn check_valid_hex_or_decimal(string: &str) -> bool {
 }
 
 pub fn assemble(insts: &str) -> Vec<u32> {
+    println!("Assembling file");
     let insts_splitted = insts.lines();
 
     let insts_cleaned = insts_splitted
-        .map(|line| line.split('#').next().unwrap())
+        .filter_map(|line| line.split('#').next())
         .filter(|line| !line.is_empty());
 
     let tokens = insts_cleaned
@@ -87,26 +88,27 @@ pub fn assemble(insts: &str) -> Vec<u32> {
             label_list.insert(token.strip_suffix(':').unwrap(), (i - label_list.len()) * 4);
         });
 
-    let mut tokens_list = tokens.into_iter().filter(|token| !token.ends_with(':'));
+    let mut tokens_list = tokens.iter().filter(|token| !token.ends_with(':'));
 
     let mut compiled_insts: Vec<u32> = Vec::new();
 
     while let Some(token_1) = tokens_list.next() {
-        let opcode = str_is_in_list(KEYWORDS, token_1);
-        if opcode == None {
-            println!("Skipping unknown opcode: {}", token_1);
-            continue;
-        }
-        let opcode = opcode.unwrap();
+        let opcode = match str_is_in_list(KEYWORDS, token_1) {
+            Some(opcode) => opcode,
+            None => {
+                println!("Skipping unknown opcode: {}", token_1);
+                continue;
+            }
+        };
+
+        let keyword = KEYWORDS[opcode];
 
         match opcode {
 			// U
 			0 |    // lui
 			1 => { // auipc
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rd imm", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rd imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: imm", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let imm = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid number / hex: {}", token_3));
@@ -118,10 +120,8 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			},
 			// J
 			2 => { // jal
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rd imm/label", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm/label", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rd imm/label", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: imm/label", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let imm = get_and_convert_label_from_hashmap(&label_list, token_3, compiled_insts.len());
@@ -142,11 +142,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			34 | 	// sra
 			35 | 	// or
 			36 => { // and
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd rs1 rs2", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs1 rs2", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: rs2", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rd rs1 rs2", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rs1 rs2", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: rs2", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let rs1 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_3));
@@ -174,11 +172,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			24 | 	// slli
 			25 | 	// srli
 			26 => { // srai
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd rs1 imm", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs1 imm", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rd rs1 imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rs1 imm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: imm", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let rs1 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_3));
@@ -196,11 +192,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			7 |    // bge
 			8 |    // bltu
 			9 => { // bgeu
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rs1 rs2 imm/label", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs2 imm/label", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm/label", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rs1 rs2 imm/label", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rs2 imm/label", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: imm/label", keyword));
 
 				let rs1 = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_2));
 				let rs2 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs2: {}", token_3));
@@ -215,11 +209,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			15 | 	// sb
 			16 | 	// sh
 			17 => { // sw
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rs1 rs2 imm", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: rs2 imm", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: imm", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rs1 rs2 imm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: rs2 imm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: imm", keyword));
 
 				let rs1 = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rs1: {}", token_2));
 				let rs2 = str_is_in_list(REGISTERS, token_3).unwrap_or_else(|| panic!("Unknown register rs2: {}", token_3));
@@ -242,11 +234,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			39 | 	// csrrw
 			40 | 	// csrrs
 			41 => { // csrrc
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd csr rs1", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: csr rs1", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: rs1", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rd csr rs1", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: csr rs1", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: rs1", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let csr = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid csr number / hex: {}", token_3));
@@ -261,11 +251,9 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			42 |    // csrrwi
 			43 |    // csrrsi
 			44 => { // csrrci
-				let keyword = KEYWORDS[opcode];
-
-				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 3 tokens: rd csr zimm", keyword));
-				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 2 tokens: csr zimm", keyword));
-				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need more 1 token: zimm", keyword));
+				let token_2 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 3 tokens: rd csr zimm", keyword));
+				let token_3 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need 2 tokens: csr zimm", keyword));
+				let token_4 = tokens_list.next().unwrap_or_else(|| panic!("Opcode: {} need token: zimm", keyword));
 
 				let rd = str_is_in_list(REGISTERS, token_2).unwrap_or_else(|| panic!("Unknown register rd: {}", token_2));
 				let csr = hex_or_decimal_from_string(token_3).unwrap_or_else(|| panic!("Invalid csr number / hex: {}", token_3));
@@ -279,6 +267,8 @@ pub fn assemble(insts: &str) -> Vec<u32> {
 			_ => {}
 		}
     }
+
+    println!("Finished assembling file");
 
     compiled_insts
 }
